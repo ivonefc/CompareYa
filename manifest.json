@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "CompareYA",
+  "version": "1.0",
+  "description": "Validador de Stock Suruga-ya. Compara precios y revisa stock directo desde Google Sheets.",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://script.google.com/*",
+    "https://script.googleusercontent.com/*",
+    "https://*.suruga-ya.com/*"
+  ],
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*.suruga-ya.com/*"],
+      "js": ["content.js"]
+    }
+  ]
+}
