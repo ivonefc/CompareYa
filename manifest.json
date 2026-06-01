@@ -10,7 +10,7 @@
     "https://*.suruga-ya.com/*"
   ],
   "background": {
-    "scripts": ["background.js"]
+    "scripts": ["background.js"] //Para Chromium reemplazar "scripts" por "service_worker"
   },
   "content_scripts": [
     {
@@ -18,4 +18,9 @@
       "js": ["content.js"]
     }
   ]
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "control-stock-origami@tuservicio.com"
+    }
+  }
 }
