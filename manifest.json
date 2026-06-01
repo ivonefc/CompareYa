@@ -10,7 +10,7 @@
     "https://*.suruga-ya.com/*"
   ],
   "background": {
-    "scripts": ["background.js"] //Para Chromium reemplazar "scripts" por "service_worker"
+    "scripts": ["background.js"] //Para Chromium reemplazar esta línea por '"service_worker": "background.js"'
   },
   "content_scripts": [
     {
