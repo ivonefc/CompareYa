@@ -66,10 +66,10 @@ chrome.contextMenus.onClicked.addListener((info) => {
   });
 });
 
+// Modificación del receptor de mensajes de Suruga-ya
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "checkPrice") {
 
-    // Armar la ruta de consulta
     let fetchUrl = `${API_URL}?producto=${encodeURIComponent(request.product)}`;
     if (request.id) {
       fetchUrl += `&id=${encodeURIComponent(request.id)}`;
@@ -77,11 +77,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     // Buscamos los datos de Google Sheets y el descuento activo en paralelo
     Promise.all([
-      fetch(fetchUrl).then(res => res.json()),
+      // FIX: Si el fetch a Google falla (por caracteres raros o timeout), 
+      // lo capturamos acá mismo para que no rompa la cadena y devuelva un objeto seguro.
+      fetch(fetchUrl).then(res => res.json()).catch(err => {
+        console.warn(`⚠️ Error buscando "${request.product}" en Sheets. Se ignora.`);
+        return { error: true, encontrado: false };
+      }),
+
       chrome.storage.local.get("descuentoActual")
     ])
       .then(([dataSheets, storage]) => {
-        // Unimos la respuesta de tu planilla con el descuento seleccionado en el navegador
+        // Unimos la respuesta (sea exitosa o un error controlado) con el descuento del menú
         const respuestaCombinada = {
           ...dataSheets,
           descuentoActualSitio: storage.descuentoActual || 0
@@ -89,8 +95,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse(respuestaCombinada);
       })
       .catch(err => {
-        console.error("❌ Error conectando con la API o Storage:", err);
-        sendResponse({ error: true });
+        console.error("❌ Error catastrófico en el Background:", err);
+        // Como último recurso, si todo falla, nos aseguramos de mandar el 0% para que no crashee
+        sendResponse({ error: true, encontrado: false, descuentoActualSitio: 0 });
       });
 
     return true; // Mantiene el canal de comunicación abierto de forma asíncrona
