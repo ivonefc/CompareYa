@@ -184,6 +184,10 @@ function inyectarUI(datosPlanilla, precioActualWeb, elementoDestino) {
 function procesarProductosSurugaya() {
   // Atrapamos: Búsqueda (.product_wrap), Wishlist (tr[role="row"]), Carrito (tr.table-active), Producto (.product_detail)
   const items = document.querySelectorAll('.product_wrap, tr[role="row"], tr.table-active, .product_detail');
+
+  // CONTROL DE COLA: Cuenta solo los productos que REALMENTE se van a enviar en esta ráfaga
+  let peticionesEnCola = 0;
+
   items.forEach(item => {
     if (item.dataset.procesado) return;
 
@@ -220,7 +224,7 @@ function procesarProductosSurugaya() {
       priceEl = item.querySelector('.price-new.price-big');
 
       if (titleEl && priceEl) {
-        titulo = titleEl.innerText.trim(); // Nota: Va a incluir prefijos como "Anime Mook...", la Sheets deberá hacer match parcial
+        titulo = titleEl.innerText.trim();
         if (inputId) idProducto = inputId.value;
         precioNum = parseFloat(priceEl.innerText.replace(/[^0-9.-]+/g, "").replace(/^-/, ""));
       }
@@ -229,22 +233,32 @@ function procesarProductosSurugaya() {
     // Si recolectamos con éxito los 3 datos vitales, enviamos la solicitud al servidor
     if (titulo && precioNum > 0 && priceEl) {
       item.dataset.procesado = "true";
-      console.log(`📦 [Detección] "${titulo}" | ID: ${idProducto || 'N/A'} | Precio: ¥${precioNum}`);
 
-      chrome.runtime.sendMessage({
-        action: "checkPrice",
-        product: titulo,
-        id: idProducto,
-        price: precioNum
-      }, (response) => {
+      //LIMPIEZA DE CARACTERES: Removemos paréntesis y corchetes que rompen la API de Google
+      titulo = titulo.replace(/[()\[\]{}]/g, ' ').replace(/\s+/g, ' ').trim();
 
-        //DEBUG
-        //console.log(`🔍 [Debug API] Datos recibidos para "${titulo}":`, response);
+      console.log(`📦 [Cola de Espera #${peticionesEnCola}] Preparando: "${titulo}" | Delay: ${peticionesEnCola * 200}ms`);
 
-        if (response) {
-          inyectarUI(response, precioNum, priceEl);
-        }
-      });
+      // Guardamos las copias de las variables en este bloque para que el delay no las confunda
+      const tituloEnvio = titulo;
+      const idEnvio = idProducto;
+      const precioEnvio = precioNum;
+      const elementoPrecio = priceEl;
+
+      //ENVÍO ESCALONADO: Fila india de 200ms para no saturar las ejecuciones simultáneas de Google
+      setTimeout(() => {
+        chrome.runtime.sendMessage({
+          action: "checkPrice",
+          product: tituloEnvio,
+          id: idEnvio,
+          price: precioEnvio
+        }, (response) => {
+          if (response) {
+            inyectarUI(response, precioEnvio, elementoPrecio);
+          }
+        });
+      }, peticionesEnCola * 200);
+      peticionesEnCola++;
     }
   });
 }

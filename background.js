@@ -77,12 +77,29 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     // Buscamos los datos de Google Sheets y el descuento activo en paralelo
     Promise.all([
-      // FIX: Si el fetch a Google falla (por caracteres raros o timeout), 
-      // lo capturamos acá mismo para que no rompa la cadena y devuelva un objeto seguro.
-      fetch(fetchUrl).then(res => res.json()).catch(err => {
-        console.warn(`⚠️ Error buscando "${request.product}" en Sheets. Se ignora.`);
-        return { error: true, encontrado: false };
-      }),
+      fetch(fetchUrl)
+        .then(async res => {
+          if (!res.ok) {
+            console.error(`❌ Error HTTP ${res.status} al consultar: "${request.product}"`);
+            return { error: true, encontrado: false };
+          }
+
+          // Primero leemos la respuesta como texto plano para auditarla
+          const textoRespuesta = await res.text();
+
+          try {
+            // Si es un JSON válido, lo parseamos y lo enviamos
+            return JSON.parse(textoRespuesta);
+          } catch (e) {
+            // Si no es JSON (es un HTML de error de Google), lo atajamos acá
+            console.warn(`❌ Google no devolvió datos para "${request.product}". Devolvió una página HTML (Saturación de peticiones).`);
+            return { error: true, encontrado: false, razon: "GOOGLE_SATURADO" };
+          }
+        })
+        .catch(err => {
+          console.warn(`⚠️ Error de red buscando "${request.product}":`, err.message || err);
+          return { error: true, encontrado: false, razon: "NET_ERROR" };
+        }),
 
       chrome.storage.local.get("descuentoActual")
     ])
