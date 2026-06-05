@@ -23,16 +23,13 @@ function inyectarUI(datosPlanilla, precioActualWeb, elementoDestino) {
   }
 
   const descActualSitio = datosPlanilla.descuentoActualSitio || 0;
-
-  // DETECCION DE CARRITO: Evaluamos si la URL actual corresponde al checkout
   const esCarrito = window.location.href.includes('/cart');
 
-  // Calculamos el precio simulado SÓLO si no estamos en el carrito
   const precioConDescuentoAplicado = (descActualSitio > 0 && !esCarrito)
     ? precioActualWeb * (1 - (descActualSitio / 100))
     : precioActualWeb;
 
-  // EFECTO DE TACHADO VISUAL (Se omite en el carrito para no deformar la tabla)
+  // EFECTO DE TACHADO VISUAL
   if (descActualSitio !== 0 && !esCarrito) {
     const textoOriginal = elementoDestino.textContent.trim();
     const matchNumero = textoOriginal.match(/([0-9,.]+)/);
@@ -53,13 +50,11 @@ function inyectarUI(datosPlanilla, precioActualWeb, elementoDestino) {
     elementoDestino.innerHTML = '';
 
     const spanOriginal = document.createElement('span');
-    // Forzamos text-decoration lineal y reseteamos cualquier desvío de herencia del sitio
     spanOriginal.style.cssText = 'display: inline-block; text-decoration: line-through #999 !important; text-decoration-style: solid !important; color: #999 !important; font-size: 0.9em;';
     spanOriginal.innerHTML = originalHtml;
 
     spanOriginal.querySelectorAll('*').forEach(el => {
       el.style.color = '#999';
-      // Limpiamos los tachados de los elementos hijos para que no se superpongan abajo
       el.style.textDecoration = 'none';
     });
 
@@ -72,13 +67,27 @@ function inyectarUI(datosPlanilla, precioActualWeb, elementoDestino) {
   }
 
   // =========================================================================
-  // SECCIÓN EXCLUSIVA: SEMÁFORO Y TOOLTIP (Solo si existe en Google Sheets)
+  // SECCIÓN EXCLUSIVA: SEMÁFORO Y TOOLTIP
   // =========================================================================
   if (datosPlanilla.encontrado) {
-    const ultimoCosto = parseFloat(datosPlanilla.ultimoPrecioCompra);
+    const ultimoCosto = parseFloat(datosPlanilla.ultimoPrecioCompra) || 0;
     const stock = datosPlanilla.stockDisponible;
 
-    // Conversión inteligente del descuento histórico (de 0.15 a 15%)
+    // NUEVAS VARIABLES FINANCIERAS (FASE 1)
+    const precioVentaArs = parseFloat(datosPlanilla.ultimoPrecioVentaARS) || 0;
+    const cotizacion = parseFloat(datosPlanilla.cotizacionJpyArs) || 6.0;
+    const costoSimuladoArs = Math.round(precioConDescuentoAplicado * cotizacion);
+    const margenEstimado = precioVentaArs > 0 ? (precioVentaArs - costoSimuladoArs) : 0;
+    const formatoArs = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
+
+    // Cálculo del porcentaje de diferencia exacto (+/-)
+    let porcentajeTexto = "";
+    if (ultimoCosto > 0) {
+      const variacion = ((precioConDescuentoAplicado / ultimoCosto) - 1) * 100;
+      const signo = variacion > 0 ? "+" : "";
+      porcentajeTexto = ` (${signo}${variacion.toFixed(0)}%)`;
+    }
+
     let descHistoricoCompra = "0%";
     if (datosPlanilla.descuentoHistorico) {
       const valorDesc = parseFloat(datosPlanilla.descuentoHistorico);
@@ -91,7 +100,7 @@ function inyectarUI(datosPlanilla, precioActualWeb, elementoDestino) {
       }
     }
 
-    // CREACIÓN DEL SEMÁFORO
+    // CREACIÓN DEL SEMÁFORO (Ahora incluye el porcentaje de variación)
     const contenedor = document.createElement('span');
     contenedor.className = 'control-badge-inyectado';
     contenedor.style.cssText = 'position:relative; display:inline-block; margin-left:8px; vertical-align:middle; font-family:sans-serif; z-index: 100;';
@@ -101,40 +110,40 @@ function inyectarUI(datosPlanilla, precioActualWeb, elementoDestino) {
 
     if (precioConDescuentoAplicado <= ultimoCosto) {
       badge.style.backgroundColor = '#2ecc71';
-      badge.innerText = `🟢 (¥${ultimoCosto})`;
+      badge.innerText = `🟢 ¥${ultimoCosto}${porcentajeTexto}`;
     } else if (precioConDescuentoAplicado <= (ultimoCosto * 1.15)) {
       badge.style.backgroundColor = '#f1c40f';
       badge.style.color = '#000';
-      badge.innerText = `🟡 (¥${ultimoCosto})`;
+      badge.innerText = `🟡 ¥${ultimoCosto}${porcentajeTexto}`;
     } else {
       badge.style.backgroundColor = '#e74c3c';
-      badge.innerText = `🔴 (¥${ultimoCosto})`;
+      badge.innerText = `🔴 ¥${ultimoCosto}${porcentajeTexto}`;
     }
 
-    // TOOLTIP FLOTANTE (Fijado al Body para evitar recortes de tablas y menú)
     const tooltipId = 'tooltip-' + Math.random().toString(36).substring(2, 9);
-    contenedor.dataset.tooltipId = tooltipId; // Lo asociamos para poder borrarlo luego
+    contenedor.dataset.tooltipId = tooltipId;
 
     const tooltip = document.createElement('div');
     tooltip.id = tooltipId;
     tooltip.className = 'origami-tooltip-inyectado';
-    // Cambiamos a position:fixed para que flote sobre todo el navegador sin que ninguna tabla lo atrape
-    tooltip.style.cssText = 'visibility:hidden; opacity:0; position:fixed; background:#2c3e50; color:#fff; padding:10px; border-radius:6px; width:250px; font-size:12px; line-height:1.4; box-shadow:0 4px 10px rgba(0,0,0,0.5); transition:opacity 0.15s ease-in-out; text-align:left; z-index:2147483647; pointer-events:none;';
+    tooltip.style.cssText = 'visibility:hidden; opacity:0; position:fixed; background:#2c3e50; color:#fff; padding:10px; border-radius:6px; width:260px; font-size:12px; line-height:1.4; box-shadow:0 4px 10px rgba(0,0,0,0.5); transition:opacity 0.15s ease-in-out; text-align:left; z-index:2147483647; pointer-events:none;';
 
-    // Texto dinámico para no confundir la vista del carrito con la simulación manual
     const lineaPrecioContextual = esCarrito
       ? `<span style="color:#3498db;">Precio Final (Carrito):</span>
          <span style="color:#3498db; font-weight:bold;">¥${Math.round(precioActualWeb)}</span>`
       : `<span style="color:#f1c40f;">Simulado (${descActualSitio}% OFF):</span>
-         <span style="color:${descActualSitio > 0 ? '#2ecc71' : 'lightgray'}">¥${Math.round(precioConDescuentoAplicado)}</span>`;
+         <span style="color:${descActualSitio > 0 ? '#2ecc71' : 'lightgray'}; font-weight:bold;">¥${Math.round(precioConDescuentoAplicado)}</span>`;
 
+    // HTML DEL TOOLTIP
     tooltip.innerHTML = `
       <div style="color:#f39c12; font-weight:bold; border-bottom:1px solid #555; margin-bottom:5px;">Datos RESTOCK</div>
       <b>Artículo:</b> ${datosPlanilla.productoOriginal}<br>
       <b>Último Costo:</b> ¥${ultimoCosto} <span style="color:#f39c12; font-weight:bold;">(${descHistoricoCompra} OFF)</span><br>
       <b>Llegada:</b> ${datosPlanilla.fechaCompra || 'N/A'}<br>
+      
       <hr style="border:0; border-top:1px dashed #555; margin:5px 0;">
-      <div style="margin-top:5px; font-weight:bold;">
+      
+      <div style="margin-top:5px;">
         <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
           <span>Precio Web Original:</span>
           <span style="color:lightgray">¥${precioActualWeb.toFixed(0)}</span>
@@ -143,19 +152,37 @@ function inyectarUI(datosPlanilla, precioActualWeb, elementoDestino) {
           ${lineaPrecioContextual}
         </div>
       </div>
-      <b style="color:${stock > 0 ? '#2ecc71' : '#e74c3c'}">Stock Total:</b> ${stock} un.<br>
-      <div style="font-size:10px; color:#aaa; margin-top:5px;">Match: ${datosPlanilla.matchConfianza}</div>
+
+      <hr style="border:0; border-top:1px dashed #555; margin:5px 0;">
+      
+      <div style="margin-top:5px; font-weight:bold;">
+        <div style="display:flex; justify-content:space-between; margin-bottom:2px; color:#a29bfe;">
+          <span>Costo ARS (x${cotizacion.toFixed(2)}):</span>
+          <span>${formatoArs.format(costoSimuladoArs)}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:2px; color:#00cec9;">
+          <span>Venta Gral ARS:</span>
+          <span>${precioVentaArs > 0 ? formatoArs.format(precioVentaArs) : 'No fijado'}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-top:4px; padding-top:4px; border-top:1px solid #555; color:${margenEstimado >= 0 ? '#2ecc71' : '#e74c3c'};">
+          <span>Margen Estimado:</span>
+          <span>${precioVentaArs > 0 ? formatoArs.format(margenEstimado) : 'N/A'}</span>
+        </div>
+      </div>
+
+      <hr style="border:0; border-top:1px dashed #555; margin:6px 0;">
+      
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div><b style="color:${stock > 0 ? '#2ecc71' : '#e74c3c'}">Stock Total:</b> ${stock} un.</div>
+        <div style="font-size:10px; color:#aaa;">Match: ${datosPlanilla.matchConfianza}</div>
+      </div>
     `;
 
-    // Lo inyectamos en el Body, no en el contenedor
     document.body.appendChild(tooltip);
 
-    // Calculamos su posición en pantalla en tiempo real cuando pasás el mouse
     badge.onmouseenter = () => {
       const rect = badge.getBoundingClientRect();
-      // Lo posicionamos justo debajo del círculo rojo/amarillo/verde (evita el menú superior)
       tooltip.style.top = (rect.bottom + 8) + 'px';
-      // Lo centramos en base al círculo
       tooltip.style.left = (rect.left + (rect.width / 2)) + 'px';
       tooltip.style.transform = 'translateX(-50%)';
 
@@ -253,6 +280,13 @@ function procesarProductosSurugaya() {
           id: idEnvio,
           price: precioEnvio
         }, (response) => {
+
+          // =================================================================
+          // 🔥 LOG DE DEBUG AVANZADO (FASE 1)
+          // =================================================================
+          console.log(`🔍 [Debug API] Datos recibidos para "${tituloEnvio}":`, response);
+          // =================================================================
+
           if (response) {
             inyectarUI(response, precioEnvio, elementoPrecio);
           }
